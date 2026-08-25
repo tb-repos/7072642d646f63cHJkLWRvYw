@@ -1,0 +1,13 @@
+target/
+*.jar
+.classpath
+.factorypath
+.project
+.settings/
+.metadata/
+application-local.yml
+.env
+.env.*
+
+target/
+*.jar
