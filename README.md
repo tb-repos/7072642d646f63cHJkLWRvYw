@@ -1,4 +1,4 @@
-# Shrine Tours Enterprise Backend
+# TourBhook Enterprise Backend
 
 This package is a stronger client-demo baseline for the Shrine Tours backend.
 
