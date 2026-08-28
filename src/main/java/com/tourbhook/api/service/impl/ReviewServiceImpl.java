@@ -11,7 +11,10 @@ import com.tourbhook.api.repository.exception.DuplicateResourceException;
 import com.tourbhook.api.repository.exception.ResourceNotFoundException;
 import com.tourbhook.api.service.AuthenticatedUserService;
 import com.tourbhook.api.service.ReviewService;
-
+import com.tourbhook.api.dto.moderation.ModerationResult;
+import com.tourbhook.api.repository.exception.ContentModerationException;
+import com.tourbhook.api.service.AccountEnforcementService;
+import com.tourbhook.api.service.ModerationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,14 +30,20 @@ import java.util.List;
 @Transactional
 public class ReviewServiceImpl implements ReviewService {
 
+    private static final String MODERATION_BLOCK_MESSAGE =
+            "Your account has been permanently blocked for violating content guidelines.";
+
     private final ReviewRepository reviewRepository;
     private final PlaceRepository placeRepository;
     private final AuthenticatedUserService authenticatedUserService;
+    private final ModerationService moderationService;
+    private final AccountEnforcementService accountEnforcementService;
 
     @Override
     public ReviewResponse submitReview(String placeId, SubmitReviewRequest request) {
         User user = authenticatedUserService.getCurrentUser();
         Place place = findPlace(placeId);
+        enforceModeration(user, request.comment());
 
         if (reviewRepository.existsByUserAndPlace(user, place)) {
             throw new DuplicateResourceException(
@@ -59,6 +68,7 @@ public class ReviewServiceImpl implements ReviewService {
     public ReviewResponse updateReview(String placeId, SubmitReviewRequest request) {
         User user = authenticatedUserService.getCurrentUser();
         Place place = findPlace(placeId);
+        enforceModeration(user, request.comment());
 
         Review review = reviewRepository.findByUserAndPlace(user, place)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -120,6 +130,14 @@ public class ReviewServiceImpl implements ReviewService {
     private Place findPlace(String placeId) {
         return placeRepository.findById(placeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Destination not found"));
+    }
+
+    private void enforceModeration(User user, String comment) {
+        ModerationResult result = moderationService.checkText(comment);
+        if (result.flagged()) {
+            accountEnforcementService.blockPermanently(user, result.reason());
+            throw new ContentModerationException(MODERATION_BLOCK_MESSAGE);
+        }
     }
 
     private String normalizeComment(String comment) {

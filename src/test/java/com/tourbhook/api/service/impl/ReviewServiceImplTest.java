@@ -10,7 +10,7 @@ import com.tourbhook.api.repository.ReviewRepository;
 import com.tourbhook.api.repository.exception.DuplicateResourceException;
 import com.tourbhook.api.repository.exception.ResourceNotFoundException;
 import com.tourbhook.api.service.AuthenticatedUserService;
-
+import com.tourbhook.api.dto.moderation.ModerationResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,11 +18,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
+import com.tourbhook.api.repository.exception.ContentModerationException;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
-
+import com.tourbhook.api.service.AccountEnforcementService;
+import com.tourbhook.api.service.ModerationService;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -40,6 +41,10 @@ class ReviewServiceImplTest {
     private PlaceRepository placeRepository;
     @Mock
     private AuthenticatedUserService authenticatedUserService;
+    @Mock
+    private ModerationService moderationService;
+    @Mock
+    private AccountEnforcementService accountEnforcementService;
 
     @InjectMocks
     private ReviewServiceImpl reviewService;
@@ -49,11 +54,10 @@ class ReviewServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        user = User.builder().id("user-1").name("Asha Rao").avatarUrl("https://cdn/avatar.png").build();
+        user = User.builder().id("user-1").name("Test").avatarUrl("https://cdn/avatar.png").build();
         place = Place.builder().id("place-1").name("Meenakshi Temple").rating(BigDecimal.ZERO).reviewsCount(0).build();
 
-        // getReviewsForPlace() is a public read that never resolves the caller,
-        // so this is lenient rather than a strict stub for that one test.
+        lenient().when(moderationService.checkText(any())).thenReturn(ModerationResult.clean());
         lenient().when(authenticatedUserService.getCurrentUser()).thenReturn(user);
         when(placeRepository.findById("place-1")).thenReturn(Optional.of(place));
     }
@@ -113,7 +117,37 @@ class ReviewServiceImplTest {
         assertThat(captor.getValue().getComment()).isNull();
     }
 
+    @Test
+    void submitReview_whenModerationFlagsComment_blocksUserAndNeverSaves() {
+        SubmitReviewRequest request = new SubmitReviewRequest(3, "this is a scam");
+        when(moderationService.checkText("this is a scam"))
+                .thenReturn(ModerationResult.flagged("Text matched a banned term"));
+
+        assertThatThrownBy(() -> reviewService.submitReview("place-1", request))
+                .isInstanceOf(ContentModerationException.class);
+
+        verify(accountEnforcementService).blockPermanently(user, "Text matched a banned term");
+        verify(reviewRepository, never()).existsByUserAndPlace(any(), any());
+        verify(reviewRepository, never()).save(any(Review.class));
+        verify(placeRepository, never()).save(any(Place.class));
+    }
+
     /// updateReview
+
+    @Test
+    void updateReview_whenModerationFlagsComment_blocksUserAndNeverSaves() {
+        SubmitReviewRequest request = new SubmitReviewRequest(3, "this is a scam");
+        when(moderationService.checkText("this is a scam"))
+                .thenReturn(ModerationResult.flagged("Text matched a banned term"));
+
+        assertThatThrownBy(() -> reviewService.updateReview("place-1", request))
+                .isInstanceOf(ContentModerationException.class);
+
+        verify(accountEnforcementService).blockPermanently(user, "Text matched a banned term");
+        verify(reviewRepository, never()).findByUserAndPlace(any(), any());
+        verify(reviewRepository, never()).save(any(Review.class));
+    }
+
     @Test
     void updateReview_whenReviewExists_updatesRatingAndComment() {
         Review existing = Review.builder().id("rev-1").user(user).place(place).rating(2).comment("Meh").build();

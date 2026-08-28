@@ -19,7 +19,7 @@ import com.tourbhook.api.repository.exception.BadRequestException;
 import com.tourbhook.api.repository.exception.ResourceNotFoundException;
 import com.tourbhook.api.service.AuthenticatedUserService;
 import com.tourbhook.api.service.FileService;
-
+import com.tourbhook.api.dto.moderation.ModerationResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +28,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
-
+import com.tourbhook.api.repository.exception.ContentModerationException;
+import com.tourbhook.api.service.AccountEnforcementService;
+import com.tourbhook.api.service.ModerationService;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -46,10 +48,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Unit tests for {@link ProfileServiceImpl}. Every collaborator is mocked so
- * these run without a Spring context or a database.
- */
 @ExtendWith(MockitoExtension.class)
 class ProfileServiceImplTest {
 
@@ -65,6 +63,10 @@ class ProfileServiceImplTest {
     private AuthenticatedUserService authenticatedUserService;
     @Mock
     private FileService fileService;
+    @Mock
+    private ModerationService moderationService;
+    @Mock
+    private AccountEnforcementService accountEnforcementService;
 
     @InjectMocks
     private ProfileServiceImpl profileService;
@@ -75,8 +77,8 @@ class ProfileServiceImplTest {
     void setUp() {
         user = User.builder()
                 .id("user-1")
-                .name("Asha Rao")
-                .email("asha@example.com")
+                .name("Test")
+                .email("test@example.com")
                 .phone("9876543210")
                 .password("hashed-password")
                 .dob(LocalDate.of(1996, 4, 12))
@@ -88,24 +90,21 @@ class ProfileServiceImplTest {
                 .deleted(false)
                 .build();
 
-        // Most service methods resolve the caller through this same path;
-        // a couple (static page lookups) don't, so these are lenient rather
-        // than strict stubs to avoid an UnnecessaryStubbingException there.
         lenient().when(authenticatedUserService.getCurrentUser()).thenReturn(user);
         lenient().when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+        lenient().when(moderationService.checkImage(any())).thenReturn(ModerationResult.clean());
     }
 
-    // ---------------------------------------------------------------
-    // getProfile / updateProfile
-    // ---------------------------------------------------------------
+
+    /// getProfile / updateProfile
 
     @Test
     void getProfile_returnsCurrentUserMappedToResponse() {
         ProfileResponse response = profileService.getProfile();
 
         assertThat(response.id()).isEqualTo("user-1");
-        assertThat(response.name()).isEqualTo("Asha Rao");
-        assertThat(response.email()).isEqualTo("asha@example.com");
+        assertThat(response.name()).isEqualTo("Test");
+        assertThat(response.email()).isEqualTo("test@example.com");
         assertThat(response.premium()).isFalse();
     }
 
@@ -119,26 +118,26 @@ class ProfileServiceImplTest {
 
     @Test
     void updateProfile_updatesOnlyTheSuppliedFields() {
-        UpdateProfileRequest request = new UpdateProfileRequest("  Asha K Rao  ", null, "9999999999", null);
+        UpdateProfileRequest request = new UpdateProfileRequest("  Test T  ", null, "9999999999", null);
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ProfileResponse response = profileService.updateProfile(request);
 
-        assertThat(response.name()).isEqualTo("Asha K Rao");
+        assertThat(response.name()).isEqualTo("Test T");
         assertThat(response.phone()).isEqualTo("9999999999");
-        assertThat(response.email()).isEqualTo("asha@example.com");
+        assertThat(response.email()).isEqualTo("test@example.com");
         verify(userRepository, never()).findByEmailIgnoreCase(anyString());
     }
 
     @Test
     void updateProfile_normalizesAndAllowsKeepingOwnEmail() {
-        UpdateProfileRequest request = new UpdateProfileRequest(null, "ASHA@EXAMPLE.COM", null, null);
-        when(userRepository.findByEmailIgnoreCase("asha@example.com")).thenReturn(Optional.of(user));
+        UpdateProfileRequest request = new UpdateProfileRequest(null, "TEST@EXAMPLE.COM", null, null);
+        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(Optional.of(user));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ProfileResponse response = profileService.updateProfile(request);
 
-        assertThat(response.email()).isEqualTo("asha@example.com");
+        assertThat(response.email()).isEqualTo("test@example.com");
     }
 
     @Test
@@ -154,9 +153,7 @@ class ProfileServiceImplTest {
         verify(userRepository, never()).save(any(User.class));
     }
 
-    // ---------------------------------------------------------------
-    // uploadAvatar
-    // ---------------------------------------------------------------
+    /// uploadAvatar
 
     @Test
     void uploadAvatar_withValidImage_updatesAndReturnsUrl() throws IOException {
@@ -210,14 +207,25 @@ class ProfileServiceImplTest {
         verify(userRepository, never()).save(any(User.class));
     }
 
-    // ---------------------------------------------------------------
-    // Payment methods
-    // ---------------------------------------------------------------
+    @Test
+    void uploadAvatar_whenModerationFlagsImage_blocksUserAndStopsUpload() throws IOException {
+        MultipartFile file = new MockMultipartFile("file", "photo.jpg", "image/jpeg", "image-bytes".getBytes());
+        when(moderationService.checkImage(file)).thenReturn(ModerationResult.flagged("Flagged by moderation"));
+
+        assertThatThrownBy(() -> profileService.uploadAvatar(file))
+                .isInstanceOf(ContentModerationException.class);
+
+        verify(accountEnforcementService).blockPermanently(user, "Flagged by moderation");
+        verify(fileService, never()).uploadAvatar(any());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    /// Payment methods
 
     @Test
     void addPaymentMethod_asFirstMethod_isMarkedPrimaryAutomatically() {
         AddPaymentMethodRequest request = new AddPaymentMethodRequest(
-                "visa", "4111 1111 1111 1111", "Asha Rao", "09/29", null);
+                "visa", "4111 1111 1111 1111", "Test T", "09/29", null);
         when(paymentMethodRepository.findByUserOrderByPrimaryMethodDescCreatedAtDesc(user))
                 .thenReturn(List.of());
         when(paymentMethodRepository.save(any(PaymentMethod.class)))
@@ -263,9 +271,8 @@ class ProfileServiceImplTest {
         verify(paymentMethodRepository).save(other);
     }
 
-    // ---------------------------------------------------------------
-    // Subscription / static pages / account deletion
-    // ---------------------------------------------------------------
+
+    /// Subscription / static pages / account deletion
 
     @Test
     void getSubscription_whenNoneExists_throwsResourceNotFound() {

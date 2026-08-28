@@ -259,6 +259,43 @@ public class GoogleMapsClient {
         }
     }
 
+    public Map<String, Object> getDirections(String origin, String destination, String waypoints, String travelMode) {
+        UriComponentsBuilder builder = UriComponentsBuilder
+                .fromHttpUrl("https://maps.googleapis.com/maps/api/directions/json")
+                .queryParam("origin", origin)
+                .queryParam("destination", destination)
+                .queryParam("mode", travelMode)
+                .queryParam("key", apiKey);
+
+        if (waypoints != null && !waypoints.isBlank()) {
+            builder.queryParam("waypoints", waypoints);
+        }
+
+        String url = builder.toUriString();
+        log.info("Google Directions URL: {}", safeUrl(url));
+
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    new HttpEntity<>(new HttpHeaders()),
+                    Map.class
+            );
+
+            Map<String, Object> body = response.getBody();
+            log.info("Google Directions response status: {}", body != null ? body.get("status") : "null body");
+            return body != null ? body : Collections.emptyMap();
+
+        } catch (RestClientResponseException e) {
+            log.error("Google Directions API error: status={}, body={}",
+                    e.getRawStatusCode(), e.getResponseBodyAsString(), e);
+            return Collections.emptyMap();
+        } catch (Exception e) {
+            log.error("Google Directions unexpected error: {}", e.getMessage(), e);
+            return Collections.emptyMap();
+        }
+    }
+
     private String safeUrl(String url) {
         return apiKey == null || apiKey.isBlank() ? url : url.replace(apiKey, "****");
     }

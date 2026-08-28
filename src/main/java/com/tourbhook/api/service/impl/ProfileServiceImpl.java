@@ -7,7 +7,7 @@ import java.io.IOException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-
+import com.tourbhook.api.dto.moderation.ModerationResult;
 import com.tourbhook.api.dto.profile.AddPaymentMethodRequest;
 import com.tourbhook.api.dto.profile.PaymentMethodResponse;
 import com.tourbhook.api.dto.profile.ProfileResponse;
@@ -28,7 +28,9 @@ import com.tourbhook.api.repository.exception.ResourceNotFoundException;
 import com.tourbhook.api.service.AuthenticatedUserService;
 import com.tourbhook.api.service.FileService;
 import com.tourbhook.api.service.ProfileService;
-
+import com.tourbhook.api.repository.exception.ContentModerationException;
+import com.tourbhook.api.service.AccountEnforcementService;
+import com.tourbhook.api.service.ModerationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -44,6 +46,8 @@ public class ProfileServiceImpl implements ProfileService {
     private final StaticPageRepository staticPageRepository;
     private final AuthenticatedUserService authenticatedUserService;
     private final FileService fileService;
+    private final ModerationService moderationService;
+    private final AccountEnforcementService accountEnforcementService;
 
     private static final Set<String> ALLOWED_TYPES = Set.of(
             "image/jpeg",
@@ -106,6 +110,13 @@ public class ProfileServiceImpl implements ProfileService {
 
         if (file.getSize() > MAX_AVATAR_SIZE_BYTES) {
             throw new BadRequestException("File size must be less than 5 MB");
+        }
+
+        ModerationResult moderationResult = moderationService.checkImage(file);
+        if (moderationResult.flagged()) {
+            accountEnforcementService.blockPermanently(user, moderationResult.reason());
+            throw new ContentModerationException(
+                    "Your account has been permanently blocked for violating content guidelines.");
         }
 
         try {

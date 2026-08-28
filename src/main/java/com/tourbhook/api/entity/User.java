@@ -52,6 +52,14 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private boolean deleted;
 
+    @Column(nullable = false)
+    private boolean blocked;
+
+    @Column(length = 500)
+    private String blockedReason;
+
+    private java.time.Instant blockedAt;
+
     @PrePersist
     public void prePersist() {
         if (id == null) id = UUID.randomUUID().toString();
