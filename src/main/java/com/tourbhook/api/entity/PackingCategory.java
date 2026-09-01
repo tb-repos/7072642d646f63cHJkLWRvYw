@@ -30,6 +30,9 @@ public class PackingCategory extends BaseEntity {
     @Column(nullable = false)
     private Boolean checked;
 
+    @Column(nullable = false)
+    private Boolean aiGenerated;
+
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "packing_category_id")
     @Builder.Default
@@ -40,5 +43,6 @@ public class PackingCategory extends BaseEntity {
         if (id == null) id = UUID.randomUUID().toString();
         if (templateOnly == null) templateOnly = false;
         if (checked == null) checked = false;
+        if (aiGenerated == null) aiGenerated = false;
     }
 }

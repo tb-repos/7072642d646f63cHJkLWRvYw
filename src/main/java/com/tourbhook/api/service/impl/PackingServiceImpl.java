@@ -2,10 +2,8 @@ package com.tourbhook.api.service.impl;
 
 import java.util.ArrayList;
 import java.util.List;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import com.tourbhook.api.dto.packing.AddPackingCategoryItemRequest;
 import com.tourbhook.api.dto.packing.AddPackingCategoryRequest;
 import com.tourbhook.api.dto.packing.AddPackingItemRequest;
@@ -26,6 +24,19 @@ import com.tourbhook.api.repository.PackingListRepository;
 import com.tourbhook.api.repository.exception.ResourceNotFoundException;
 import com.tourbhook.api.service.PackingService;
 import com.tourbhook.api.service.TripService;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import com.tourbhook.api.dto.packing.GeneratedPackingCategory;
+import com.tourbhook.api.dto.packing.GeneratedPackingList;
+import com.tourbhook.api.dto.weather.WeatherResponse;
+import com.tourbhook.api.entity.Activity;
+import com.tourbhook.api.entity.Itinerary;
+import com.tourbhook.api.repository.ItineraryRepository;
+import com.tourbhook.api.service.PackingRecommendationService;
+import com.tourbhook.api.service.WeatherService;
+
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,12 +49,23 @@ public class PackingServiceImpl implements PackingService {
 
     private final PackingListRepository packingListRepository;
     private final PackingCategoryRepository packingCategoryRepository;
+    private final ItineraryRepository itineraryRepository;
     private final TripService tripService;
+    private final WeatherService weatherService;
+    private final PackingRecommendationService packingRecommendationService;
 
     @Override
-    @Transactional(readOnly = true)
     public PackingResponse getPacking(String tripId) {
         PackingList packingList = getPackingList(tripId);
+        ensureRecommendationsAreCurrent(packingList, false);
+        return mapPacking(packingList);
+    }
+
+    @Override
+    public PackingResponse regeneratePacking(String tripId) {
+        PackingList packingList = getPackingList(tripId);
+        ensureRecommendationsAreCurrent(packingList, true);
+
         return mapPacking(packingList);
     }
 
@@ -184,6 +206,86 @@ public class PackingServiceImpl implements PackingService {
                 ));
     }
 
+    private void ensureRecommendationsAreCurrent(PackingList packingList, boolean force) {
+        Trip trip = packingList.getTrip();
+        List<String> activityTitles = collectActivityTitles(trip);
+        String currentSignature = computeItinerarySignature(activityTitles);
+
+        boolean alreadyCurrent = !force && currentSignature.equals(packingList.getItinerarySignature());
+        if (alreadyCurrent) {
+            return;
+        }
+
+        WeatherResponse weather = safelyFetchWeather(trip);
+        GeneratedPackingList generated = packingRecommendationService.generate(
+                trip.getCity(), trip.getDays(), weather, activityTitles);
+
+        applyGeneratedCategories(packingList, generated);
+        packingList.setItinerarySignature(currentSignature);
+        packingList.setPackingSource(generated.source());
+        packingList.setPackingGeneratedAt(Instant.now());
+        packingListRepository.save(packingList);
+
+        log.info("Packing recommendations regenerated for trip {} (source={}, {} categories)",
+                trip.getId(), generated.source(), generated.categories().size());
+    }
+
+    private List<String> collectActivityTitles(Trip trip) {
+        return itineraryRepository.findByTrip(trip)
+                .map(Itinerary::getDays)
+                .orElseGet(List::of)
+                .stream()
+                .flatMap(day -> day.getActivities().stream())
+                .map(Activity::getTitle)
+                .filter(title -> title != null && !title.isBlank())
+                .toList();
+    }
+
+    private WeatherResponse safelyFetchWeather(Trip trip) {
+        try {
+            return weatherService.getWeather(trip.getCity(), trip.getStartDate());
+        } catch (Exception e) {
+            log.warn("Weather lookup failed for trip {} (city={}): {}", trip.getId(), trip.getCity(), e.getMessage());
+            return null;
+        }
+    }
+
+    private String computeItinerarySignature(List<String> activityTitles) {
+        String joined = String.join("|", activityTitles);
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(joined.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : hash) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            return String.valueOf(joined.hashCode());
+        }
+    }
+
+    private void applyGeneratedCategories(PackingList packingList, GeneratedPackingList generated) {
+        packingList.getCategories().removeIf(category -> Boolean.TRUE.equals(category.getAiGenerated()));
+
+        for (GeneratedPackingCategory generatedCategory : generated.categories()) {
+            List<PackingItem> items = generatedCategory.items().stream()
+                    .map(name -> PackingItem.builder().name(name).checked(false).quantity(1).build())
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+
+            packingList.getCategories().add(
+                    PackingCategory.builder()
+                            .name(generatedCategory.name())
+                            .icon(generatedCategory.icon())
+                            .templateOnly(false)
+                            .checked(false)
+                            .aiGenerated(true)
+                            .items(items)
+                            .build()
+            );
+        }
+    }
+
     private PackingResponse mapPacking(PackingList packingList) {
         return new PackingResponse(
                 packingList.getTrip().getId(),
@@ -196,7 +298,9 @@ public class PackingServiceImpl implements PackingService {
                                 c.getChecked(),
                                 c.getItems().stream().map(i -> new PackingItemResponse(i.getId(), i.getName(), i.getChecked(), i.getQuantity())).toList()
                         ))
-                        .toList()
+                        .toList(),
+                packingList.getPackingSource(),
+                packingList.getPackingGeneratedAt()
         );
     }
 }

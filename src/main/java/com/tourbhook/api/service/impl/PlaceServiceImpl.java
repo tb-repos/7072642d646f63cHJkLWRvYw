@@ -12,7 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import java.util.function.Function;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -36,13 +36,12 @@ public class PlaceServiceImpl implements PlaceService {
     private final PlaceRepository placeRepository;
     private final TripService tripService;
     private final GoogleMapsClient googleMapsClient;
+    private final PlaceRankingService placeRankingService;
 
     @Override
     public List<PlaceResponse> getPlaces(String city) {
         if (city == null || city.isBlank()) {
-            return placeRepository.findAll().stream()
-                    .map(this::mapPlace)
-                    .toList();
+            return toRankedResponses(placeRepository.findAll());
         }
 
         String normalizedCity = city.trim();
@@ -53,19 +52,15 @@ public class PlaceServiceImpl implements PlaceService {
             dbPlaces = placeRepository.findByCityIgnoreCase(normalizedCity);
         }
 
-        return dbPlaces.stream()
-                .filter(Objects::nonNull)
-                .map(this::mapPlace)
-                .toList();
+        return toRankedResponses(dbPlaces);
     }
 
     @Override
     public List<PlaceResponse> getSuggestedPlaces(String city) {
         if (city == null || city.isBlank()) {
-            return placeRepository.findAll().stream()
+            return toRankedResponses(placeRepository.findAll().stream()
                     .filter(Place::isSuggested)
-                    .map(this::mapPlace)
-                    .toList();
+                    .toList());
         }
 
         String normalizedCity = city.trim();
@@ -76,10 +71,7 @@ public class PlaceServiceImpl implements PlaceService {
             suggestedPlaces = placeRepository.findByCityIgnoreCaseAndSuggestedTrue(normalizedCity);
         }
 
-        return suggestedPlaces.stream()
-                .filter(Objects::nonNull)
-                .map(this::mapPlace)
-                .toList();
+        return toRankedResponses(suggestedPlaces);
     }
 
     @Override
@@ -92,10 +84,7 @@ public class PlaceServiceImpl implements PlaceService {
 
         List<Place> dbResults = placeRepository.searchByKeyword(keyword);
         if (!dbResults.isEmpty()) {
-            return dbResults.stream()
-                    .filter(Objects::nonNull)
-                    .map(this::mapPlace)
-                    .toList();
+            return toRankedResponses(dbResults);
         }
 
         Map<String, Object> googleResponse = googleMapsClient.textSearch(keyword);
@@ -120,27 +109,26 @@ public class PlaceServiceImpl implements PlaceService {
             }
         }
 
-        return savedPlaces.stream()
-                .filter(Objects::nonNull)
-                .collect(java.util.stream.Collectors.toMap(
-                        Place::getId,
-                        p -> p,
-                        (a, b) -> a,
-                        LinkedHashMap::new
-                ))
-                .values()
-                .stream()
-                .map(this::mapPlace)
-                .toList();
+        List<Place> deduplicated = new ArrayList<>(
+                savedPlaces.stream()
+                        .filter(Objects::nonNull)
+                        .collect(java.util.stream.Collectors.toMap(
+                                Place::getId,
+                                p -> p,
+                                (a, b) -> a,
+                                LinkedHashMap::new
+                        ))
+                        .values()
+        );
+        return toRankedResponses(deduplicated);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PlaceResponse> suggested() {
-        return placeRepository.findAll().stream()
+        return toRankedResponses(placeRepository.findAll().stream()
                 .filter(Place::isSuggested)
-                .map(this::mapPlace)
-                .toList();
+                .toList());
     }
 
     @Override
@@ -353,6 +341,13 @@ public class PlaceServiceImpl implements PlaceService {
                             (errorMessage != null ? " (" + errorMessage + ")" : "")
             );
         }
+    }
+
+    private List<PlaceResponse> toRankedResponses(List<Place> places) {
+        List<Place> nonNull = places.stream().filter(Objects::nonNull).toList();
+        return placeRankingService.rank(nonNull, Function.identity()).stream()
+                .map(this::mapPlace)
+                .toList();
     }
 
     private PlaceResponse mapPlace(Place place) {

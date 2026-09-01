@@ -68,6 +68,19 @@ moderation:
   blocked-domains:
     - malicious-example.test
 
+itinerary:
+  rating-weighting:
+    threshold: 4.5
+    boost-weight: 2.0
+
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+  model: gemini-3.6-flash
+  base-url: https://generativelanguage.googleapis.com/v1beta/models
+
+review-summary:
+  regeneration-threshold: 10
+
 app:
   base-url: http://32.193.3.150:8080
   upload-dir: ${user.dir}/uploads

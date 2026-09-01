@@ -19,7 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.tourbhook.api.service.ReviewSummaryService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
@@ -38,6 +38,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final AuthenticatedUserService authenticatedUserService;
     private final ModerationService moderationService;
     private final AccountEnforcementService accountEnforcementService;
+    private final ReviewSummaryService reviewSummaryService;
 
     @Override
     public ReviewResponse submitReview(String placeId, SubmitReviewRequest request) {
@@ -125,6 +126,7 @@ public class ReviewServiceImpl implements ReviewService {
                 : BigDecimal.valueOf(average).setScale(2, RoundingMode.HALF_UP));
         place.setReviewsCount(Math.toIntExact(count));
         placeRepository.save(place);
+        reviewSummaryService.onReviewsChanged(place);
     }
 
     private Place findPlace(String placeId) {

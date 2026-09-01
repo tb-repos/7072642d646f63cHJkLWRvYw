@@ -34,6 +34,14 @@ public class PackingList extends BaseEntity {
     @Builder.Default
     private List<PackingCategory> categories = new ArrayList<>();
 
+    @Column(length = 128)
+    private String itinerarySignature;
+
+    @Column(length = 20)
+    private String packingSource;
+
+    private java.time.Instant packingGeneratedAt;
+
     @PrePersist
     public void prePersist() {
         if (id == null) 

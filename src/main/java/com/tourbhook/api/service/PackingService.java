@@ -5,6 +5,7 @@ import java.util.List;
 
 public interface PackingService {
     PackingResponse getPacking(String tripId);
+    PackingResponse regeneratePacking(String tripId);
     List<PackingTemplateResponse> getCategories();
     PackingResponse addItem(String tripId, AddPackingItemRequest request);
     PackingResponse toggleItem(String tripId, String itemId, TogglePackingItemRequest request);

@@ -27,6 +27,16 @@ public class PackingController {
 						.data(response).timestamp(LocalDateTime.now()).path("/api/v1/packing").build());
 	}
 
+	@PostMapping("/{tripId}/regenerate")
+	public ResponseEntity<ApiResponse<PackingResponse>> regeneratePacking(@PathVariable String tripId) {
+		PackingResponse response = packingService.regeneratePacking(tripId);
+		return ResponseEntity
+				.ok(ApiResponse.<PackingResponse>builder().success(true)
+						.message("Packing recommendations regenerated successfully")
+						.data(response).timestamp(LocalDateTime.now())
+						.path("/api/v1/packing/" + tripId + "/regenerate").build());
+	}
+
 	@GetMapping("/categories")
 	public ResponseEntity<ApiResponse<List<PackingTemplateResponse>>> getCategories() {
 		List<PackingTemplateResponse> response = packingService.getCategories();

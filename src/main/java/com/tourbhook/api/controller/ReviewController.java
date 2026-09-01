@@ -9,7 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import com.tourbhook.api.dto.review.ReviewSummaryResponse;
+import com.tourbhook.api.service.ReviewSummaryService;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -19,6 +20,21 @@ import java.util.List;
 public class ReviewController {
 
     private final ReviewService reviewService;
+    private final ReviewSummaryService reviewSummaryService;
+
+    @GetMapping("/summary")
+    public ResponseEntity<ApiResponse<ReviewSummaryResponse>> getSummary(@PathVariable String placeId) {
+        ReviewSummaryResponse response = reviewSummaryService.getSummary(placeId);
+        return ResponseEntity.ok(
+                ApiResponse.<ReviewSummaryResponse>builder()
+                        .success(true)
+                        .message("Review summary fetched successfully")
+                        .data(response)
+                        .timestamp(LocalDateTime.now())
+                        .path("/api/v1/places/" + placeId + "/reviews/summary")
+                        .build()
+        );
+    }
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<ReviewResponse>>> getReviews(@PathVariable String placeId) {

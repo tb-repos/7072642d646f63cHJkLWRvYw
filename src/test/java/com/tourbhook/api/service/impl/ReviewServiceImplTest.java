@@ -31,6 +31,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.tourbhook.api.service.ReviewSummaryService;
 
 @ExtendWith(MockitoExtension.class)
 class ReviewServiceImplTest {
@@ -45,6 +46,8 @@ class ReviewServiceImplTest {
     private ModerationService moderationService;
     @Mock
     private AccountEnforcementService accountEnforcementService;
+    @Mock
+    private ReviewSummaryService reviewSummaryService;
 
     @InjectMocks
     private ReviewServiceImpl reviewService;
@@ -209,7 +212,7 @@ class ReviewServiceImplTest {
         List<ReviewResponse> responses = reviewService.getReviewsForPlace("place-1");
 
         assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).userName()).isEqualTo("Asha Rao");
+        assertThat(responses.get(0).userName()).isEqualTo("Test");
     }
 
     @Test

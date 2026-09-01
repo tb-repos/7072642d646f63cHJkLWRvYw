@@ -64,6 +64,15 @@ public class Place {
     @Column(name = "source_query")
     private String sourceQuery;
 
+    @Column(name = "review_summary", length = 3000)
+    private String reviewSummary;
+
+    @Column(name = "review_summary_generated_at")
+    private java.time.Instant reviewSummaryGeneratedAt;
+
+    @Column(name = "reviews_count_at_last_summary")
+    private Integer reviewsCountAtLastSummary;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -88,6 +97,10 @@ public class Place {
 
         if (this.typicalDuration == null || this.typicalDuration.isBlank()) {
             this.typicalDuration = "2-3 hours";
+        }
+
+        if (this.reviewsCountAtLastSummary == null) {
+            this.reviewsCountAtLastSummary = 0;
         }
     }
 }
