@@ -60,11 +60,15 @@ public class User extends BaseEntity {
 
     private java.time.Instant blockedAt;
 
+    @Column(length = 10, nullable = false)
+    private String preferredLanguage;
+
     @PrePersist
     public void prePersist() {
         if (id == null) id = UUID.randomUUID().toString();
         if (level == null) level = "Explorer";
         if (levelProgress == null) levelProgress = BigDecimal.ZERO;
         if (tripsCompleted == null) tripsCompleted = 0;
+        if (preferredLanguage == null || preferredLanguage.isBlank()) preferredLanguage = "en";
     }
 }

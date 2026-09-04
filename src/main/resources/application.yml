@@ -49,6 +49,12 @@ spring:
       max-file-size: 10MB
       max-request-size: 10MB
 
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+    use-code-as-default-message: false
+
 server:
   port: 8080
 
@@ -90,9 +96,43 @@ app:
       access-token-expiration-ms: 86400000
       refresh-token-expiration-ms: 604800000
 
-
 razorpay:
   key-id: ${RAZORPAY_KEY_ID:}
   key-secret: ${RAZORPAY_KEY_SECRET:}
   webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
   currency: INR
+
+language:
+  supported:
+    - code: en
+      english-name: English
+      native-name: English
+      tier: 1
+    - code: de
+      english-name: German
+      native-name: Deutsch
+      tier: 2
+    - code: zh
+      english-name: Chinese
+      native-name: 中文
+      tier: 2
+    - code: mr
+      english-name: Marathi
+      native-name: मराठी
+      tier: 2
+    - code: kn
+      english-name: Kannada
+      native-name: ಕನ್ನಡ
+      tier: 2
+    - code: gu
+      english-name: Gujarati
+      native-name: ગુજરાતી
+      tier: 2
+    - code: raj
+      english-name: Rajasthani
+      native-name: राजस्थानी
+      tier: 2
+    - code: or
+      english-name: Odia
+      native-name: ଓଡ଼ିଆ
+      tier: 2

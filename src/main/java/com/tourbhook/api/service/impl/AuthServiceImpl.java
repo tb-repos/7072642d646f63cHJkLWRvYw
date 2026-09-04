@@ -214,7 +214,14 @@ public class AuthServiceImpl implements AuthService {
                         .build()
         );
 
-        emailService.sendOtpEmail(email, otp);
+        emailService.sendOtpEmail(email, otp, resolvePreferredLanguage(email));
+    }
+
+    private String resolvePreferredLanguage(String email) {
+        return userRepository.findByEmailIgnoreCase(email)
+                .map(User::getPreferredLanguage)
+                .filter(language -> language != null && !language.isBlank())
+                .orElse("en");
     }
 
     private String generateOtp() {
