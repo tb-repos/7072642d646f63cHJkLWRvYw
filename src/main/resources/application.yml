@@ -1,9 +1,9 @@
 spring:
   application:
-    name: shrine-tours-enterprise-backend
+    name: tourbhook-enterprise-backend
 
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/shrinetours}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/tourbhook}
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -49,6 +49,12 @@ spring:
       max-file-size: 10MB
       max-request-size: 10MB
 
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+    use-code-as-default-message: false
+
 server:
   port: 8080
 
@@ -59,6 +65,27 @@ google:
     places-nearby-url: https://places.googleapis.com/v1/places:searchNearby
     places-text-search-url: https://places.googleapis.com/v1/places:searchText
     weather-url: https://weather.googleapis.com/v1/currentConditions:lookup
+    directions-url: https://maps.googleapis.com/maps/api/directions/json
+
+moderation:
+  banned-terms:
+    - scam
+    - spam-link
+  blocked-domains:
+    - malicious-example.test
+
+itinerary:
+  rating-weighting:
+    threshold: 4.5
+    boost-weight: 2.0
+
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+  model: gemini-3.6-flash
+  base-url: https://generativelanguage.googleapis.com/v1beta/models
+
+review-summary:
+  regeneration-threshold: 10
 
 app:
   base-url: http://32.193.3.150:8080
@@ -69,9 +96,43 @@ app:
       access-token-expiration-ms: 86400000
       refresh-token-expiration-ms: 604800000
 
-
 razorpay:
   key-id: ${RAZORPAY_KEY_ID:}
   key-secret: ${RAZORPAY_KEY_SECRET:}
   webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
   currency: INR
+
+language:
+  supported:
+    - code: en
+      english-name: English
+      native-name: English
+      tier: 1
+    - code: de
+      english-name: German
+      native-name: Deutsch
+      tier: 2
+    - code: zh
+      english-name: Chinese
+      native-name: 中文
+      tier: 2
+    - code: mr
+      english-name: Marathi
+      native-name: मराठी
+      tier: 2
+    - code: kn
+      english-name: Kannada
+      native-name: ಕನ್ನಡ
+      tier: 2
+    - code: gu
+      english-name: Gujarati
+      native-name: ગુજરાતી
+      tier: 2
+    - code: raj
+      english-name: Rajasthani
+      native-name: राजस्थानी
+      tier: 2
+    - code: or
+      english-name: Odia
+      native-name: ଓଡ଼ିଆ
+      tier: 2

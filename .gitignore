@@ -11,3 +11,5 @@ application-local.yml
 
 target/
 *.jar
+
+.idea/
